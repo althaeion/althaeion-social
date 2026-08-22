@@ -40,6 +40,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <html>
       <head>
+        <link rel="preconnect" href="https://api.fontshare.com" crossOrigin="anonymous" /><link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" /><style dangerouslySetInnerHTML={{ __html: '*:not([class*="material-symbols"]):not([class*="material-icons"]):not([class*="fa-" i]):not([class*="icon" i]):not(i):not(svg):not(svg *){font-family:"Satoshi",system-ui,sans-serif!important}' }} />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         {!!process.env.DATAFAST_WEBSITE_ID && (
           <Script
