@@ -3,6 +3,7 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
+  AnalyticsData,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import {
@@ -632,4 +633,53 @@ export class BlueskyProvider extends SocialAbstract implements SocialProvider {
   mentionFormat(idOrHandle: string, name: string) {
     return `@${idOrHandle}`;
   }
+
+  /**
+   * Per-post counts from the AT Protocol.
+   *
+   * `getPosts` takes AT URIs, so a stored post id that is not one is passed
+   * through as-is and simply returns nothing rather than throwing.
+   */
+  async postAnalytics(
+    integrationId: string,
+    accessToken: string,
+    postId: string,
+    date: number
+  ): Promise<AnalyticsData[]> {
+    if (!postId) {
+      return [];
+    }
+
+    try {
+      // Like/repost/reply counts are public on the AT Protocol, and getAgent
+      // needs the whole Integration row which this signature does not carry.
+      // The public AppView answers the same question without credentials.
+      const response = await fetch(
+        `https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(postId)}`
+      );
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      const post: any = data?.posts?.[0];
+
+      if (!post) {
+        return [];
+      }
+
+      const today = dayjs().format('YYYY-MM-DD');
+
+      return [
+        { label: 'Likes', data: [{ total: String(post.likeCount ?? 0), date: today }], percentageChange: 0 },
+        { label: 'Reposts', data: [{ total: String(post.repostCount ?? 0), date: today }], percentageChange: 0 },
+        { label: 'Quotes', data: [{ total: String(post.quoteCount ?? 0), date: today }], percentageChange: 0 },
+        { label: 'Replies', data: [{ total: String(post.replyCount ?? 0), date: today }], percentageChange: 0 },
+      ];
+    } catch {
+      return [];
+    }
+  }
+
 }

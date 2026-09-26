@@ -27,6 +27,28 @@ import { WebhooksRepository } from '@gitroom/nestjs-libraries/database/prisma/we
 import { WebhooksService } from '@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.service';
 import { SignatureRepository } from '@gitroom/nestjs-libraries/database/prisma/signatures/signature.repository';
 import { SignatureService } from '@gitroom/nestjs-libraries/database/prisma/signatures/signature.service';
+import { AutomationRepository } from '@gitroom/nestjs-libraries/database/prisma/automation/automation.repository';
+import { AutomationService } from '@gitroom/nestjs-libraries/database/prisma/automation/automation.service';
+import { AutomationEngine } from '@gitroom/nestjs-libraries/automation/automation.engine';
+import { AutomationNodeRunner } from '@gitroom/nestjs-libraries/automation/automation.node.runner';
+import { AutomationConfigValidator } from '@gitroom/nestjs-libraries/automation/automation.config.validator';
+import { ExpressionResolver } from '@gitroom/nestjs-libraries/automation/expression.resolver';
+import { BrandRepository } from '@gitroom/nestjs-libraries/database/prisma/brand/brand.repository';
+import { BrandService } from '@gitroom/nestjs-libraries/database/prisma/brand/brand.service';
+import { BrandAnalyzer } from '@gitroom/nestjs-libraries/database/prisma/brand/brand.analyzer';
+import { AiUsageRepository } from '@gitroom/nestjs-libraries/database/prisma/ai-usage/ai.usage.repository';
+import { AiUsageService } from '@gitroom/nestjs-libraries/database/prisma/ai-usage/ai.usage.service';
+import { AdsRepository } from '@gitroom/nestjs-libraries/database/prisma/ads/ads.repository';
+import { AdsService } from '@gitroom/nestjs-libraries/database/prisma/ads/ads.service';
+import { AdsGenerator } from '@gitroom/nestjs-libraries/database/prisma/ads/ads.generator';
+import { AutopilotRepository } from '@gitroom/nestjs-libraries/database/prisma/autopilot/autopilot.repository';
+import { AutopilotService } from '@gitroom/nestjs-libraries/database/prisma/autopilot/autopilot.service';
+import { NotificationPreferenceService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.preference.service';
+import { ConnectionVerifier } from '@gitroom/nestjs-libraries/database/prisma/integrations/connection.verifier';
+import { SafeHttpFetcher } from '@gitroom/nestjs-libraries/services/safe.http.fetcher';
+import { LinkCardService } from '@gitroom/nestjs-libraries/services/link.card.service';
+import { StockMediaService } from '@gitroom/nestjs-libraries/services/stock.media.service';
+import { ContentEditorService } from '@gitroom/nestjs-libraries/openai/content.editor.service';
 import { AutopostRepository } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.repository';
 import { AutopostService } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.service';
 import { SetsService } from '@gitroom/nestjs-libraries/database/prisma/sets/sets.service';
@@ -69,6 +91,28 @@ import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/adm
     PostsRepository,
     StripeService,
     SignatureRepository,
+    AutomationRepository,
+    AutomationService,
+    AutomationEngine,
+    AutomationNodeRunner,
+    AutomationConfigValidator,
+    ExpressionResolver,
+    BrandRepository,
+    BrandService,
+    BrandAnalyzer,
+    AiUsageRepository,
+    AiUsageService,
+    AdsRepository,
+    AdsService,
+    AdsGenerator,
+    AutopilotRepository,
+    AutopilotService,
+    ConnectionVerifier,
+    NotificationPreferenceService,
+    SafeHttpFetcher,
+    LinkCardService,
+    StockMediaService,
+    ContentEditorService,
     AutopostRepository,
     AutopostService,
     SignatureService,

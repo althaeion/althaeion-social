@@ -3,6 +3,7 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
+  AnalyticsData,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
@@ -326,4 +327,46 @@ export class MastodonProvider extends SocialAbstract implements SocialProvider {
       postDetails
     );
   }
+
+  /**
+   * Per-post counts, read straight off the status.
+   *
+   * Mastodon has no analytics endpoint and no history: a status returns the
+   * counts it has right now. So this reports a single point rather than a
+   * series, and `percentageChange` stays 0 — inventing a trend from one reading
+   * would be a lie the chart would happily draw.
+   */
+  async postAnalytics(
+    integrationId: string,
+    accessToken: string,
+    postId: string,
+    date: number
+  ): Promise<AnalyticsData[]> {
+    if (!postId) {
+      return [];
+    }
+
+    // The same resolution every other call in this provider uses.
+    const instance = process.env.MASTODON_URL || 'https://mastodon.social';
+
+    const response = await fetch(`${instance}/api/v1/statuses/${postId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      // A deleted or unreachable status is normal, not an error worth throwing:
+      // the analytics screen should show nothing, not fail to load.
+      return [];
+    }
+
+    const status = await response.json();
+    const today = dayjs().format('YYYY-MM-DD');
+
+    return [
+      { label: 'Favourites', data: [{ total: String(status.favourites_count ?? 0), date: today }], percentageChange: 0 },
+      { label: 'Reblogs', data: [{ total: String(status.reblogs_count ?? 0), date: today }], percentageChange: 0 },
+      { label: 'Replies', data: [{ total: String(status.replies_count ?? 0), date: today }], percentageChange: 0 },
+    ];
+  }
+
 }

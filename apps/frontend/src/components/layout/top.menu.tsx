@@ -156,6 +156,67 @@ export const useMenuItem = () => {
       ),
       path: '/third-party',
     },
+    {
+      name: t('brand', 'Brand'),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 3v18M12 3c-3 2-5 4.5-5 7.5S9 16 12 16s5-2.5 5-5.5S15 5 12 3Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/brand',
+    },
+    {
+      name: t('automations', 'Automations'),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M4 6h6m4 0h6M4 12h10m4 0h2M4 18h6m4 0h6M12 4v4M18 10v4M10 16v4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/automations',
+    },
+    {
+      name: t('ads', 'Ads'),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M3 10v4a1 1 0 0 0 1 1h3l5 4V5L7 9H4a1 1 0 0 0-1 1ZM17 8.5a5 5 0 0 1 0 7M20 6a9 9 0 0 1 0 12"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/ads',
+    },
+    {
+      name: t('autopilot', 'Autopilot'),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+          <path
+            d="M12 7v5l3.5 2"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/autopilot',
+    },
   ] satisfies MenuItemInterface[] as MenuItemInterface[];
 
   const secondMenu = [

@@ -3,6 +3,7 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
+  AnalyticsData,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import dayjs from 'dayjs';
@@ -333,4 +334,46 @@ export class TelegramProvider extends SocialAbstract implements SocialProvider {
       return false;
     }
   }
+
+  /**
+   * Channel subscribers.
+   *
+   * The Bot API deliberately gives bots no per-post view counts, so there is
+   * nothing honest to report at post level — returning a fabricated zero would
+   * draw a flat line that looks like a measurement. Subscribers is the one real
+   * number available, and it is reported as the channel-level figure it is.
+   */
+  async analytics(
+    id: string,
+    accessToken: string,
+    date: number
+  ): Promise<AnalyticsData[]> {
+    const chatId = id;
+
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getChatMemberCount?chat_id=${chatId}`
+      );
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const body = await response.json();
+      if (!body?.ok) {
+        return [];
+      }
+
+      return [
+        {
+          label: 'Subscribers',
+          data: [{ total: String(body.result ?? 0), date: dayjs().format('YYYY-MM-DD') }],
+          percentageChange: 0,
+        },
+      ];
+    } catch {
+      return [];
+    }
+  }
+
 }

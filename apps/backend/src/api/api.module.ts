@@ -34,6 +34,9 @@ import { NoAuthIntegrationsController } from '@gitroom/backend/api/routes/no.aut
 import { EnterpriseController } from '@gitroom/backend/api/routes/enterprise.controller';
 import { OAuthAppController } from '@gitroom/backend/api/routes/oauth-app.controller';
 import { ApprovedAppsController } from '@gitroom/backend/api/routes/approved-apps.controller';
+import { AutomationController } from '@gitroom/backend/api/routes/automation.controller';
+import { BrandController } from '@gitroom/backend/api/routes/brand.controller';
+import { AdsController } from '@gitroom/backend/api/routes/ads.controller';
 import { OAuthController, OAuthAuthorizedController } from '@gitroom/backend/api/routes/oauth.controller';
 import { AnnouncementsController } from '@gitroom/backend/api/routes/announcements.controller';
 import { AdminController } from '@gitroom/backend/api/routes/admin.controller';
@@ -57,6 +60,9 @@ const authenticatedController = [
   WebhookController,
   SignatureController,
   AutopostController,
+  AutomationController,
+  BrandController,
+  AdsController,
   SetsController,
   ThirdPartyController,
   OAuthAppController,

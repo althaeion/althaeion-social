@@ -1,8 +1,10 @@
+import dayjs from 'dayjs';
 import {
   AuthTokenDetails,
   PostDetails,
   PostResponse,
   SocialProvider,
+  AnalyticsData,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
@@ -396,4 +398,59 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
 
     return undefined;
   }
+
+  /**
+   * Per-message reactions and thread replies.
+   *
+   * Discord reports reactions as a list of emoji with counts, so each emoji
+   * becomes its own series — a post that earned 40 fire emoji and 2 thumbs-down
+   * says something a single "reactions: 42" would hide. Custom emoji are shown
+   * as :name: the way Discord itself writes them.
+   *
+   * `postId` carries "channelId/messageId" because the Discord API needs both
+   * and the caller only has one field to store it in.
+   */
+  async postAnalytics(
+    integrationId: string,
+    accessToken: string,
+    postId: string,
+    date: number
+  ): Promise<AnalyticsData[]> {
+    if (!postId || !postId.includes('/')) {
+      return [];
+    }
+
+    const [channelId, messageId] = postId.split('/');
+
+    const response = await fetch(
+      `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}` } }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const message = await response.json();
+    const today = dayjs().format('YYYY-MM-DD');
+    const out: AnalyticsData[] = [];
+
+    for (const reaction of message?.reactions || []) {
+      const name = String(reaction?.emoji?.name || '');
+      const label = reaction?.emoji?.id ? `:${name}:` : name || 'Reaction';
+      out.push({
+        label,
+        data: [{ total: String(reaction?.count ?? 0), date: today }],
+        percentageChange: 0,
+      });
+    }
+
+    const replies = Number(message?.thread?.message_count ?? 0);
+    if (replies > 0) {
+      out.push({ label: 'Comments', data: [{ total: String(replies), date: today }], percentageChange: 0 });
+    }
+
+    return out;
+  }
+
 }

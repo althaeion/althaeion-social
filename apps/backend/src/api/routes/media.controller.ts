@@ -25,6 +25,10 @@ import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
 import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
 import { VideoDto } from '@gitroom/nestjs-libraries/dtos/videos/video.dto';
 import { VideoFunctionDto } from '@gitroom/nestjs-libraries/dtos/videos/video.function.dto';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as crypto from 'crypto';
 
 @ApiTags('Media')
 @Controller('/media')
@@ -149,6 +153,93 @@ export class MediaController {
       getFile.path,
       originalName
     );
+  }
+
+  // Upload en MORCEAUX — PORT FIDÈLE du vrai TryPost
+  // (App\Services\Media\ChunkedAssetReceiver::receiveViaLocalAssemble +
+  //  App\Http\Controllers\App\AssetController::storeChunked). Contrat IDENTIQUE :
+  //  query params file_name/range_start/range_end/total_size/upload_id, et le
+  //  chunk = le CORPS BRUT de la requête ($request->getContent() côté Laravel).
+  //  identifier = md5(userId + fileName + totalSize + uploadId) ; range_start===0
+  //  écrit, sinon append ; fini quand (range_end+1) >= total_size.
+  //  Déclaré AVANT `/:endpoint` (route catch-all).
+  @Post('/upload-chunked')
+  async uploadChunked(
+    @GetOrgFromRequest() org: Organization,
+    @Req() req: Request,
+    @Query('file_name') fileName: string,
+    @Query('range_start') rangeStartStr: string,
+    @Query('range_end') rangeEndStr: string,
+    @Query('total_size') totalSizeStr: string,
+    @Query('upload_id') uploadId: string
+  ) {
+    const rangeStart = parseInt(rangeStartStr || '0', 10) || 0;
+    const rangeEnd = parseInt(rangeEndStr || '0', 10) || 0;
+    const totalSize = parseInt(totalSizeStr || '0', 10) || 0;
+
+    // chunk = corps brut de la requête (comme $request->getContent())
+    const chunk: Buffer = await new Promise((resolve, reject) => {
+      const parts: Buffer[] = [];
+      req.on('data', (c: Buffer) => parts.push(c));
+      req.on('end', () => resolve(Buffer.concat(parts)));
+      req.on('error', reject);
+    });
+
+    // identifier = md5("{userId}{fileName}{totalSize}{uploadId}")  (TryPost)
+    const identifier = crypto
+      .createHash('md5')
+      .update(`${org.id}${fileName}${totalSize}${uploadId}`)
+      .digest('hex');
+
+    const dir = path.join(os.tmpdir(), 'postiz-chunks');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const tempFile = path.join(dir, identifier);
+
+    // range_start === 0 -> écrit (tronque) ; sinon append   (TryPost)
+    if (rangeStart === 0) {
+      fs.writeFileSync(tempFile, chunk);
+    } else {
+      fs.appendFileSync(tempFile, chunk);
+    }
+
+    // encore en cours ? progress = (range_end+1)/total_size * 100   (TryPost)
+    if (rangeEnd + 1 < totalSize) {
+      return {
+        done: false,
+        progress: Math.round(((rangeEnd + 1) / totalSize) * 100),
+      };
+    }
+
+    // dernier morceau : assembler -> uploader via le storage Postiz -> saveFile
+    // (équivalent de $workspace->addMediaFromPath(tempFile, fileName, 'assets'))
+    const buffer = fs.readFileSync(tempFile);
+    const assembled = {
+      fieldname: 'file',
+      originalname: fileName || identifier,
+      encoding: '7bit',
+      mimetype: 'application/octet-stream',
+      size: buffer.length,
+      buffer,
+      destination: '',
+      filename: '',
+      path: '',
+      stream: undefined as any,
+    } as Express.Multer.File;
+    const uploaded = await this.storage.uploadFile(assembled);
+    try {
+      fs.unlinkSync(tempFile);
+    } catch {
+      /* noop */
+    }
+    const media = await this._mediaService.saveFile(
+      org.id,
+      uploaded.originalname,
+      uploaded.path,
+      fileName || uploaded.originalname
+    );
+    return { done: true, media };
   }
 
   @Post('/:endpoint')

@@ -43,6 +43,11 @@ model Organization {
   webhooks            Webhooks[]
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
+  automations         Automation[]
+  brandProfile        BrandProfile?
+  aiUsage             AiUsageLog[]
+  adCampaigns         AdCampaign[]
+  autopilot           Autopilot?
 
   @@index([apiKey])
   @@index([streakSince])
@@ -120,6 +125,7 @@ model User {
   @@index([account])
   @@index([lastOnline])
   @@index([pictureId])
+  notificationPreference NotificationPreference?
 }
 
 model UsedCodes {
@@ -967,4 +973,339 @@ model Announcement {
   description String
   color       AnnouncementColor @default(INFO)
   createdAt   DateTime          @default(now())
+}
+
+enum AutomationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+enum AutomationTriggerType {
+  SCHEDULE
+  POST_PUBLISHED
+  POST_SCHEDULED
+}
+
+enum AutomationNodeType {
+  TRIGGER
+  GENERATE
+  DELAY
+  CONDITION
+  PUBLISH
+  WEBHOOK
+  END
+  FETCH_RSS
+  HTTP_REQUEST
+}
+
+enum AutomationRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AutomationNodeRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+/// A saved workflow. `nodes` and `edges` hold the graph exactly as the visual
+/// builder draws it; the engine walks it node by node and never re-reads the
+/// builder's layout fields.
+model Automation {
+  id             String                @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  status         AutomationStatus      @default(DRAFT)
+  triggerType    AutomationTriggerType
+  /// Trigger settings: cron-ish schedule fields, or the post filter for
+  /// POST_PUBLISHED / POST_SCHEDULED.
+  triggerConfig  String                @default("{}")
+  nodes          String                @default("[]")
+  edges          String                @default("[]")
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization  Organization             @relation(fields: [organizationId], references: [id])
+  runs          AutomationRun[]
+  triggerItems  AutomationTriggerItem[]
+  nodeStates    AutomationNodeState[]
+
+  @@index([organizationId])
+  @@index([status, nextRunAt])
+  @@index([deletedAt])
+}
+
+/// One execution of an Automation.
+model AutomationRun {
+  id           String              @id @default(uuid())
+  automationId String
+  status       AutomationRunStatus @default(PENDING)
+  /// Values produced by nodes so far, addressable from later nodes as
+  /// {{ node.<key> }} through the expression resolver.
+  context      String              @default("{}")
+  error        String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  automation Automation          @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  nodeRuns   AutomationNodeRun[]
+
+  @@index([automationId])
+  @@index([status])
+}
+
+/// One node executed inside a run. Kept per node so a failed workflow can be
+/// read like a stack trace instead of a single opaque error.
+model AutomationNodeRun {
+  id         String                  @id @default(uuid())
+  runId      String
+  nodeId     String
+  type       AutomationNodeType
+  status     AutomationNodeRunStatus @default(PENDING)
+  input      String                  @default("{}")
+  output     String                  @default("{}")
+  error      String?
+  attempt    Int                     @default(0)
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime                @default(now())
+
+  run AutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([nodeId])
+}
+
+/// Dedupe ledger for anything a trigger has already consumed — an RSS GUID, a
+/// post id. Without it a feed that republishes an item floods the workflow.
+model AutomationTriggerItem {
+  id           String   @id @default(uuid())
+  automationId String
+  externalId   String
+  createdAt    DateTime @default(now())
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, externalId])
+  @@index([automationId])
+}
+
+/// A per-node watermark that survives BETWEEN runs.
+///
+/// AutomationTriggerItem answers "have I already handled this exact item?".
+/// This answers a different question: "how far had this node got last time?" —
+/// the newest publish date an RSS node has seen, or the set of payload hashes an
+/// HTTP poll has already returned. Without it, a polling node re-reads its whole
+/// source on every fire and either republishes old items or has to keep an
+/// unbounded dedupe list to avoid it.
+///
+/// Deliberately keyed on (automationId, nodeId) rather than on a run: the whole
+/// point is that it outlives the run that wrote it.
+model AutomationNodeState {
+  id           String   @id @default(uuid())
+  automationId String
+  nodeId       String
+  /// JSON: { last_item_date?: string, seen_keys?: string[] }
+  data         String   @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, nodeId])
+  @@index([automationId])
+}
+
+/// Per-user switches for the notifications the app sends.
+///
+/// Postiz could notify but not be told to stop, which matters more now that the
+/// connection verifier warns ahead of a scheduled post: an alert nobody can turn
+/// off is an alert everybody learns to ignore. Defaults are all ON, so nothing
+/// goes quiet for an existing user who never opens the setting.
+model NotificationPreference {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  postPublished       Boolean  @default(true)
+  postFailed          Boolean  @default(true)
+  accountDisconnected Boolean  @default(true)
+  mentionedInComment  Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Tone, voice, language and colours, read on EVERY AI generation so output
+/// sounds like the brand instead of like a model.
+model BrandProfile {
+  id             String   @id @default(uuid())
+  organizationId String   @unique
+  name           String?
+  website        String?
+  description    String?
+  audience       String?
+  tone           String?
+  voice          String?
+  language       String   @default("en")
+  /// JSON array of hex colours, extracted from the site when autofilled.
+  colors         String   @default("[]")
+  keywords       String   @default("[]")
+  /// Phrases the brand never uses; injected as a negative constraint.
+  avoid          String   @default("[]")
+  analyzedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+/// Every billable AI call, one row. Postiz already had a Credits balance but no
+/// record of what spent it, so an unexpected drain could not be explained.
+model AiUsageLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// "text" | "image" | "video"
+  kind           String
+  provider       String?
+  model          String?
+  feature        String?
+  promptTokens   Int      @default(0)
+  completionTokens Int    @default(0)
+  totalTokens    Int      @default(0)
+  quantity       Int      @default(1)
+  credits        Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@index([organizationId, kind])
+}
+
+enum AdCampaignStatus {
+  DRAFT
+  GENERATING
+  READY
+  FAILED
+}
+
+/// An ad brief plus the variants generated from it. Separate from Post because
+/// an ad is written to a funnel stage and an objective, not to a calendar slot.
+model AdCampaign {
+  id             String           @id @default(uuid())
+  organizationId String
+  name           String
+  /// "awareness" | "traffic" | "leads" | "sales" | "app_installs" | "retargeting"
+  objective      String
+  product        String?
+  audience       String?
+  offer          String?
+  /// JSON array of platform keys the copy is tailored to.
+  platforms      String           @default("[]")
+  status         AdCampaignStatus @default(DRAFT)
+  error          String?
+  deletedAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  variants     AdVariant[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+/// One generated ad. Angle and funnel stage are kept so a set can be read as a
+/// matrix rather than a pile of interchangeable captions.
+model AdVariant {
+  id         String   @id @default(uuid())
+  campaignId String
+  platform   String
+  /// "problem" | "benefit" | "social_proof" | "curiosity" | "urgency" | "objection"
+  angle      String
+  /// "top" | "middle" | "bottom"
+  stage      String
+  headline   String
+  primary    String
+  cta        String?
+  hashtags   String   @default("[]")
+  imagePrompt String?
+  imageUrl   String?
+  /// AI self-scored 0-100 on the brief; used to order the set.
+  score      Int      @default(0)
+  selected   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([campaignId, selected])
+}
+
+/// The autopilot: keeps a calendar full on its own, inside limits the operator
+/// sets. Deliberately produces DRAFTS unless autoApprove is on — an agent that
+/// can publish unattended is a liability, not a feature.
+model Autopilot {
+  id             String   @id @default(uuid())
+  organizationId String   @unique
+  active         Boolean  @default(false)
+  /// JSON array of integration ids it is allowed to fill.
+  integrations   String   @default("[]")
+  /// Posts per week it aims to keep queued.
+  postsPerWeek   Int      @default(5)
+  /// How far ahead it fills, in days.
+  horizonDays    Int      @default(14)
+  /// JSON array of "HH:mm" slots, local to the organization.
+  slots          String   @default("[]")
+  /// JSON array of themes/pillars it rotates through.
+  topics         String   @default("[]")
+  autoApprove    Boolean  @default(false)
+  /// Hard ceiling on credits it may spend per week. 0 = unlimited.
+  weeklyCreditCap Int     @default(0)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  runs         AutopilotRun[]
+
+  @@index([organizationId])
+  @@index([active, nextRunAt])
+}
+
+/// One autopilot pass, so its spending and output can be audited after the fact.
+model AutopilotRun {
+  id          String   @id @default(uuid())
+  autopilotId String
+  planned     Int      @default(0)
+  created     Int      @default(0)
+  skipped     Int      @default(0)
+  creditsUsed Int      @default(0)
+  error       String?
+  createdAt   DateTime @default(now())
+
+  autopilot Autopilot @relation(fields: [autopilotId], references: [id], onDelete: Cascade)
+
+  @@index([autopilotId])
+  @@index([createdAt])
 }
