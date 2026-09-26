@@ -29,7 +29,9 @@ const BrandAnalysis = z.object({
   audience: z
     .string()
     .describe('Who this brand sells to, in one sentence. Empty string if the site does not say.'),
-  language: z.string().describe('The primary language of the content, as an ISO 639-1 code.'),
+  language: z
+    .string()
+    .describe('The primary language of the content, as a two-letter ISO 639-1 code such as "en" or "fr".'),
   brand_color: z
     .string()
     .describe(
@@ -59,6 +61,41 @@ const BrandAnalysis = z.object({
       'Brand voice traits inferred from the site, using only the allowed values. Pick AT MOST ONE per single-select dimension and any number of style traits.'
     ),
 });
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  english: 'en', eng: 'en', french: 'fr', français: 'fr', francais: 'fr', fra: 'fr', fre: 'fr',
+  spanish: 'es', español: 'es', espanol: 'es', spa: 'es', german: 'de', deutsch: 'de', deu: 'de', ger: 'de',
+  italian: 'it', italiano: 'it', ita: 'it', portuguese: 'pt', português: 'pt', portugues: 'pt', por: 'pt',
+  dutch: 'nl', nederlands: 'nl', nld: 'nl', polish: 'pl', polski: 'pl', swedish: 'sv', svenska: 'sv',
+  danish: 'da', dansk: 'da', norwegian: 'no', norsk: 'no', finnish: 'fi', suomi: 'fi', turkish: 'tr',
+  türkçe: 'tr', russian: 'ru', ukrainian: 'uk', czech: 'cs', greek: 'el', romanian: 'ro', hungarian: 'hu',
+  japanese: 'ja', chinese: 'zh', mandarin: 'zh', korean: 'ko', arabic: 'ar', hebrew: 'he', hindi: 'hi',
+  indonesian: 'id', vietnamese: 'vi', thai: 'th', malay: 'ms',
+};
+
+/**
+ * The language the model reports, as the short code every draft is written in.
+ * The schema asks for an ISO 639-1 code, but free models also answer with a
+ * name ("French") or a sentence ("French context (operates in Lyon, ...)"), and
+ * cutting that to five characters stored "Frenc" as the brand's language.
+ */
+function languageCode(raw: unknown): string {
+  const value = String(raw || '').trim();
+  const code = /^([a-z]{2})(?:[-_]([a-z]{2}))?$/i.exec(value);
+  if (code) {
+    return code[2]
+      ? `${code[1].toLowerCase()}-${code[2].toUpperCase()}`
+      : code[1].toLowerCase();
+  }
+
+  for (const word of value.toLowerCase().split(/[^a-zÀ-ɏ]+/)) {
+    if (LANGUAGE_NAMES[word]) {
+      return LANGUAGE_NAMES[word];
+    }
+  }
+
+  return 'en';
+}
 
 /**
  * Reads a brand's own website and fills its profile, so the operator is not
@@ -134,7 +171,7 @@ export class BrandAnalyzer {
       website: finalUrl,
       description: parsed.description?.trim() || null,
       audience: parsed.audience?.trim() || null,
-      language: (parsed.language || 'en').slice(0, 5),
+      language: languageCode(parsed.language),
       colors,
       keywords: (parsed.keywords || []).map((k) => k.trim()).filter(Boolean).slice(0, 8),
       avoid: (parsed.avoid || []).map((k) => k.trim()).filter(Boolean).slice(0, 6),

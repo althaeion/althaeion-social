@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 120
     env:
       IMAGE: ghcr.io/althaeion/social-media
-      TAG: 2.23.0-tp1
+      TAG: 2.23.0-tp2
     steps:
       - uses: actions/checkout@v4
 
