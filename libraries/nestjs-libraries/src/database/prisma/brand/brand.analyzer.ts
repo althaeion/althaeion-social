@@ -97,6 +97,41 @@ function languageCode(raw: unknown): string {
   return 'en';
 }
 
+// The most frequent short words of each language: counted in the page's own text, they tell
+// its language without a model. Measured 27/09: a free model answered "en" for a page written
+// entirely in French.
+const STOPWORDS: Record<string, string[]> = {
+  en: ['the', 'and', 'of', 'to', 'is', 'for', 'with', 'you', 'your', 'our', 'we', 'are', 'on', 'in'],
+  fr: ['le', 'la', 'les', 'des', 'et', 'du', 'un', 'une', 'pour', 'avec', 'nous', 'vous', 'est', 'dans', 'sur', 'notre', 'votre'],
+  es: ['el', 'los', 'las', 'del', 'y', 'para', 'con', 'una', 'por', 'nuestro', 'nuestra', 'es', 'en', 'su'],
+  de: ['der', 'die', 'das', 'und', 'mit', 'für', 'ist', 'wir', 'sie', 'ein', 'eine', 'unsere', 'ihre', 'auf'],
+  it: ['il', 'lo', 'gli', 'della', 'e', 'per', 'con', 'una', 'che', 'nostro', 'nostra', 'sono', 'nel', 'di'],
+  pt: ['o', 'os', 'as', 'da', 'do', 'e', 'para', 'com', 'uma', 'que', 'nosso', 'nossa', 'são', 'em'],
+  nl: ['de', 'het', 'een', 'en', 'van', 'voor', 'met', 'wij', 'onze', 'jouw', 'uw', 'is', 'op', 'zijn'],
+};
+
+/**
+ * The language of a page, from what the page itself says: its `<html lang>` first,
+ * then its most frequent short words (only when one language clearly wins). Empty
+ * when neither is conclusive, so the model's answer is used.
+ */
+export function pageLanguage(html: string, text: string): string {
+  const declared = /<html[^>]*\slang\s*=\s*["']?([a-zA-Z]{2})(?:[-_][a-zA-Z]{2})?/i.exec(html || '');
+  if (declared) {
+    return declared[1].toLowerCase();
+  }
+
+  const words = (text || '').toLowerCase().split(/[^a-zà-ɏ]+/).filter(Boolean).slice(0, 3000);
+  if (words.length < 30) {
+    return '';
+  }
+  const scores = Object.entries(STOPWORDS)
+    .map(([lang, list]) => [lang, words.filter((w) => list.includes(w)).length] as [string, number])
+    .sort((a, b) => b[1] - a[1]);
+  const [best, second] = scores;
+  return best[1] >= 8 && best[1] >= 2 * second[1] ? best[0] : '';
+}
+
 /**
  * Reads a brand's own website and fills its profile, so the operator is not
  * asked to describe their own tone from a blank box — the answer is already
@@ -171,7 +206,7 @@ export class BrandAnalyzer {
       website: finalUrl,
       description: parsed.description?.trim() || null,
       audience: parsed.audience?.trim() || null,
-      language: languageCode(parsed.language),
+      language: pageLanguage(body, text) || languageCode(parsed.language),
       colors,
       keywords: (parsed.keywords || []).map((k) => k.trim()).filter(Boolean).slice(0, 8),
       avoid: (parsed.avoid || []).map((k) => k.trim()).filter(Boolean).slice(0, 6),
